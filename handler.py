@@ -16,6 +16,9 @@ INPUT_DIR = "inputs"
 OUTPUT_DIR = "/tmp"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WAV2LIP_DIR = os.path.join(APP_DIR, "Wav2Lip")
+GENERATE_AUDIO_SCRIPT = os.path.join(WAV2LIP_DIR, "generate_audio.py")
+INFERENCE_SCRIPT = os.path.join(WAV2LIP_DIR, "inference.py")
+WAV2LIP_CHECKPOINT = os.path.join(WAV2LIP_DIR, "checkpoints", "wav2lip_gan.pth")
 
 os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -133,6 +136,7 @@ def handler(event):
 
     try:
         print("🚀 JOB START:", job_id)
+        print("HANDLER VERSION: wav2lip-absolute-subprocess-paths")
         print("TEXT:", text)
         print("VOICE:", voice)
 
@@ -146,19 +150,19 @@ def handler(event):
         # =========================
         run_checked([
             sys.executable,
-            "generate_audio.py",
+            GENERATE_AUDIO_SCRIPT,
             text,
             voice,
             audio_path
-        ], cwd=WAV2LIP_DIR, timeout=300)
+        ], timeout=300)
 
         # =========================
         # 3. Wav2Lip inference
         # =========================
         run_checked([
             sys.executable,
-            "inference.py",
-            "--checkpoint_path", "checkpoints/wav2lip_gan.pth",
+            INFERENCE_SCRIPT,
+            "--checkpoint_path", WAV2LIP_CHECKPOINT,
             "--face", base_video,
             "--audio", audio_path,
             "--outfile", output_path,
