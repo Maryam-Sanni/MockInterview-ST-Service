@@ -49,21 +49,41 @@ def get_voice(language: str) -> str:
     return voices.get(language, "en-GB-LibbyNeural")
 
 # ==============================
-# BASE VIDEO
+# BASE VIDEO DOWNLOAD (ROBUST)
 # ==============================
 
 def get_base_video():
     url = os.environ.get("BASE_VIDEO_URL")
     if not url:
-        raise FileNotFoundError("BASE_VIDEO_URL not set")
+        raise Exception("BASE_VIDEO_URL is not set")
 
     path = "/tmp/base.mp4"
 
-    if not os.path.exists(path):
-        r = requests.get(url)
-        r.raise_for_status()
-        with open(path, "wb") as f:
-            f.write(r.content)
+    print("Downloading base video:", url)
+
+    r = requests.get(url, timeout=60, stream=True, allow_redirects=True)
+    r.raise_for_status()
+
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+    size = os.path.getsize(path)
+    print("Base video size:", size)
+
+    if size < 1000:
+        raise Exception("Base video download failed (too small)")
+
+    # validate video integrity
+    ffprobe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_format", "-show_streams", path],
+        capture_output=True,
+        text=True
+    )
+
+    if ffprobe.returncode != 0:
+        raise Exception("Invalid base video (ffprobe failed)")
 
     return path
 
@@ -85,19 +105,29 @@ def handler(event):
     voice = get_voice(language)
 
     try:
-        # 1. base video
+        print("🚀 JOB START:", job_id)
+        print("TEXT:", text)
+        print("VOICE:", voice)
+
+        # =========================
+        # 1. Base video
+        # =========================
         base_video = get_base_video()
 
-        # 2. audio generation
+        # =========================
+        # 2. Generate audio
+        # =========================
         subprocess.run([
             sys.executable,
             "wav2lip/generate_audio.py",
             text,
             voice,
             audio_path
-        ], check=True)
+        ], check=True, timeout=300)
 
+        # =========================
         # 3. Wav2Lip inference
+        # =========================
         subprocess.run([
             sys.executable,
             "wav2lip/inference.py",
@@ -107,9 +137,11 @@ def handler(event):
             "--outfile", output_path,
             "--resize_factor", "2",
             "--nosmooth"
-        ], check=True)
+        ], check=True, timeout=600)
 
-        # 4. upload to Cloudinary
+        # =========================
+        # 4. Upload to Cloudinary
+        # =========================
         video_url = upload_to_cloudinary(output_path)
 
         return {
@@ -119,6 +151,7 @@ def handler(event):
         }
 
     except Exception as e:
+        print("❌ ERROR:", str(e))
         return {
             "status": "error",
             "message": str(e)
