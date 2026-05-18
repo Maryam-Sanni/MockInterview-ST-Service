@@ -34,12 +34,11 @@ RUN pip install -r requirements.txt
 
 RUN mkdir -p checkpoints
 
-RUN mkdir -p checkpoints && \
-    curl -L "https://huggingface.co/camenduru/Wav2Lip/resolve/main/wav2lip_gan.pth" \
-    -o checkpoints/wav2lip_gan.pth
+RUN wget -O checkpoints/wav2lip_gan.pth \
+    "https://huggingface.co/Nekochu/Wav2Lip/blob/main/wav2lip_gan.pth"
 
-# ================================
+# ==============================
 # RUN SERVERLESS HANDLER
-# ===============================
+# ==============================
 
 CMD ["python", "-u", "handler.py"]
