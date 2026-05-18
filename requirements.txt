@@ -1,0 +1,16 @@
+runpod
+
+torch
+torchvision
+torchaudio
+
+numpy
+opencv-python
+ffmpeg-python
+
+librosa
+scipy
+soundfile
+
+tqdm
+gdown
