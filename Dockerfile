@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     git \
     wget \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================
@@ -25,20 +26,18 @@ COPY . /app
 # ==============================
 
 RUN pip install --upgrade pip
-
 RUN pip install -r requirements.txt
 
 # ==============================
-# DOWNLOAD WAV2LIP MODEL
+# WAV2LIP CHECKPOINT
 # ==============================
 
-RUN mkdir -p checkpoints
-
-RUN wget -O checkpoints/wav2lip_gan.pth \
-    "https://huggingface.co/Nekochu/Wav2Lip/blob/main/wav2lip_gan.pth"
+RUN mkdir -p checkpoints && \
+    curl -L "https://huggingface.co/rippertnt/wav2lip/resolve/main/checkpoints/wav2lip_gan.pth" \
+    -o checkpoints/wav2lip_gan.pth
 
 # ==============================
-# RUN SERVERLESS HANDLER
+# START HANDLER
 # ==============================
 
 CMD ["python", "-u", "handler.py"]
