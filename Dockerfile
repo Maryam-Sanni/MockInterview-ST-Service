@@ -37,8 +37,8 @@ RUN mkdir -p checkpoints
 RUN wget -O checkpoints/wav2lip_gan.pth \
     "https://huggingface.co/camenduru/Wav2Lip/resolve/main/wav2lip_gan.pth"
 
-# ==============================
+# ================================
 # RUN SERVERLESS HANDLER
-# ==============================
+# ===============================
 
 CMD ["python", "-u", "handler.py"]
