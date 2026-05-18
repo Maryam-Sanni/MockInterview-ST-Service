@@ -1,4 +1,5 @@
 runpod
+edge-tts
 
 torch
 torchvision
