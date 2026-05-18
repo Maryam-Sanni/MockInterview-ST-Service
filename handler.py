@@ -3,6 +3,14 @@ import subprocess
 import uuid
 import os
 import sys
+import requests
+
+import cloudinary
+import cloudinary.uploader
+
+# ==============================
+# CONFIG
+# ==============================
 
 INPUT_DIR = "inputs"
 OUTPUT_DIR = "/tmp"
@@ -10,6 +18,28 @@ OUTPUT_DIR = "/tmp"
 os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+# ==============================
+# CLOUDINARY CONFIG
+# ==============================
+
+cloudinary.config(
+    cloud_name=os.environ["CLOUDINARY_CLOUD_NAME"],
+    api_key=os.environ["CLOUDINARY_API_KEY"],
+    api_secret=os.environ["CLOUDINARY_API_SECRET"],
+    secure=True
+)
+
+def upload_to_cloudinary(file_path):
+    result = cloudinary.uploader.upload_large(
+        file_path,
+        resource_type="video",
+        folder="wav2lip"
+    )
+    return result["secure_url"]
+
+# ==============================
+# VOICES
+# ==============================
 
 def get_voice(language: str) -> str:
     voices = {
@@ -18,19 +48,28 @@ def get_voice(language: str) -> str:
     }
     return voices.get(language, "en-GB-LibbyNeural")
 
+# ==============================
+# BASE VIDEO
+# ==============================
 
 def get_base_video():
-    candidates = [
-        os.path.join(INPUT_DIR, "video.mp4"),
-        os.path.join(INPUT_DIR, "vid.mp4"),
-    ]
+    url = os.environ.get("BASE_VIDEO_URL")
+    if not url:
+        raise FileNotFoundError("BASE_VIDEO_URL not set")
 
-    for c in candidates:
-        if os.path.isfile(c):
-            return c
+    path = "/tmp/base.mp4"
 
-    raise FileNotFoundError("No base video found")
+    if not os.path.exists(path):
+        r = requests.get(url)
+        r.raise_for_status()
+        with open(path, "wb") as f:
+            f.write(r.content)
 
+    return path
+
+# ==============================
+# HANDLER
+# ==============================
 
 def handler(event):
     data = event["input"]
@@ -46,11 +85,10 @@ def handler(event):
     voice = get_voice(language)
 
     try:
+        # 1. base video
         base_video = get_base_video()
 
-        # =========================
-        # 1. Generate Audio (FIXED PATH)
-        # =========================
+        # 2. audio generation
         subprocess.run([
             sys.executable,
             "wav2lip/generate_audio.py",
@@ -59,9 +97,7 @@ def handler(event):
             audio_path
         ], check=True)
 
-        # =========================
-        # 2. Run Wav2Lip (FIXED PATH)
-        # =========================
+        # 3. Wav2Lip inference
         subprocess.run([
             sys.executable,
             "wav2lip/inference.py",
@@ -73,10 +109,13 @@ def handler(event):
             "--nosmooth"
         ], check=True)
 
+        # 4. upload to Cloudinary
+        video_url = upload_to_cloudinary(output_path)
+
         return {
             "status": "success",
             "job_id": job_id,
-            "video_path": output_path
+            "video_url": video_url
         }
 
     except Exception as e:
@@ -85,5 +124,8 @@ def handler(event):
             "message": str(e)
         }
 
+# ==============================
+# RUNPOD START
+# ==============================
 
 runpod.serverless.start({"handler": handler})
