@@ -14,6 +14,8 @@ import cloudinary.uploader
 
 INPUT_DIR = "inputs"
 OUTPUT_DIR = "/tmp"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+WAV2LIP_DIR = os.path.join(APP_DIR, "Wav2Lip")
 
 os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -36,6 +38,31 @@ def upload_to_cloudinary(file_path):
         folder="wav2lip"
     )
     return result["secure_url"]
+
+def run_checked(command, *, cwd=None, timeout=None):
+    result = subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        timeout=timeout,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.stdout:
+        print(result.stdout)
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+
+    if result.returncode != 0:
+        command_text = " ".join(command)
+        stderr = result.stderr.strip()
+        detail = f"{command_text} failed with exit code {result.returncode}"
+        if stderr:
+            detail = f"{detail}: {stderr}"
+        raise RuntimeError(detail)
+
+    return result
 
 # ==============================
 # VOICES
@@ -117,18 +144,18 @@ def handler(event):
         # =========================
         # 2. Generate audio
         # =========================
-        subprocess.run([
+        run_checked([
             sys.executable,
             "generate_audio.py",
             text,
             voice,
             audio_path
-        ], check=True, timeout=300)
+        ], cwd=WAV2LIP_DIR, timeout=300)
 
         # =========================
         # 3. Wav2Lip inference
         # =========================
-        subprocess.run([
+        run_checked([
             sys.executable,
             "inference.py",
             "--checkpoint_path", "checkpoints/wav2lip_gan.pth",
@@ -137,7 +164,7 @@ def handler(event):
             "--outfile", output_path,
             "--resize_factor", "2",
             "--nosmooth"
-        ], check=True, timeout=600)
+        ], cwd=WAV2LIP_DIR, timeout=600)
 
         # =========================
         # 4. Upload to Cloudinary
