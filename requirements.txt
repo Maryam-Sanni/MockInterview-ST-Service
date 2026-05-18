@@ -1,12 +1,12 @@
 runpod
-edge-tts
 
 torch
 torchvision
 torchaudio
 
-numpy
-opencv-python-headless
+numpy<2
+
+opencv-python
 ffmpeg-python
 
 librosa
@@ -18,3 +18,4 @@ gdown
 
 cloudinary
 requests
+edge-tts
