@@ -6,7 +6,7 @@ torchaudio
 
 numpy<2
 
-opencv-python
+opencv-python-headless
 ffmpeg-python
 
 librosa
@@ -14,8 +14,6 @@ scipy
 soundfile
 
 tqdm
-gdown
-
-cloudinary
 requests
+cloudinary
 edge-tts
