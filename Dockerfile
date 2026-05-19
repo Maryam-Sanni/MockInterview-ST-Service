@@ -30,8 +30,9 @@ COPY . /app
 # DOWNLOAD WAV2LIP CHECKPOINT (AFTER COPY)
 # ==============================
 RUN mkdir -p /app/Wav2Lip/checkpoints && \
-    wget -O /app/Wav2Lip/checkpoints/wav2lip_gan.pth \
-    https://github.com/Rudrabha/Wav2Lip/releases/download/v0.1/wav2lip_gan.pth
+    curl -L --retry 3 --fail \
+    -o /app/Wav2Lip/checkpoints/wav2lip_gan.pth \
+    https://huggingface.co/Nekochu/Wav2Lip/resolve/main/wav2lip_gan.pth
 
 # ==============================
 # START
