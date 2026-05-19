@@ -1,12 +1,13 @@
 runpod
 edge-tts
 
-torch
-torchvision
-torchaudio
+torch==2.0.1
+torchvision==0.15.2
+torchaudio==2.0.2
 
-numpy
-opencv-python-headless
+numpy==1.24.4
+
+opencv-python-headless==4.8.0.76
 ffmpeg-python
 
 librosa
