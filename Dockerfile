@@ -5,7 +5,6 @@ FROM runpod/pytorch:3.10-2.0.1-120-devel
 # ==============================
 WORKDIR /app
 
-# Install system dependencies (IMPORTANT for Wav2Lip)
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1 \
@@ -15,15 +14,17 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================
-# COPY PROJECT
+# PYTHON DEPENDENCIES (CACHE OPTIMIZED)
 # ==============================
-COPY . /app
+COPY requirements.txt /app/
+
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
 # ==============================
-# PYTHON DEPENDENCIES
+# COPY PROJECT (LAST for caching)
 # ==============================
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+COPY . /app
 
 # ==============================
 # RUN HANDLER

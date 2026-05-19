@@ -23,6 +23,15 @@ WAV2LIP_CHECKPOINT = os.path.join(WAV2LIP_DIR, "checkpoints", "wav2lip_gan.pth")
 os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+print("===== NEW BUILD MAY19 =====")
+print("APP CONTENTS:", os.listdir("/app"))
+
+if os.path.exists("/app/Wav2Lip"):
+    print("WAV2LIP EXISTS")
+    print(os.listdir("/app/Wav2Lip"))
+else:
+    print("NO WAV2LIP DIRECTORY")
+    
 # ==============================
 # CLOUDINARY CONFIG
 # ==============================
