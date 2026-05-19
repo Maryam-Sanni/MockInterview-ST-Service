@@ -1,3 +1,5 @@
+from numpy.ma import size
+
 import runpod
 import subprocess
 import uuid
@@ -18,7 +20,7 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WAV2LIP_DIR = os.path.join(APP_DIR, "Wav2Lip")
 GENERATE_AUDIO_SCRIPT = os.path.join(WAV2LIP_DIR, "generate_audio.py")
 INFERENCE_SCRIPT = os.path.join(WAV2LIP_DIR, "inference.py")
-WAV2LIP_CHECKPOINT = os.path.join(WAV2LIP_DIR, "checkpoints", "wav2lip_gan.pth")
+WAV2LIP_CHECKPOINT = "/app/Wav2Lip/checkpoints/wav2lip_gan.pth"
 
 os.makedirs(INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -31,7 +33,7 @@ if os.path.exists("/app/Wav2Lip"):
     print(os.listdir("/app/Wav2Lip"))
 else:
     print("NO WAV2LIP DIRECTORY")
-    
+
 # ==============================
 # CLOUDINARY CONFIG
 # ==============================
@@ -126,6 +128,34 @@ def get_base_video():
 
     return path
 
+def ensure_checkpoint():
+    path = "/app/Wav2Lip/checkpoints/wav2lip_gan.pth"
+
+    if os.path.exists(path) and os.path.getsize(path) > 50_000_000:
+        print("✅ Checkpoint OK:", path)
+        return
+
+    print("⚠️ Checkpoint missing — downloading...")
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    url = "https://huggingface.co/Nekochu/Wav2Lip/resolve/main/wav2lip_gan.pth"
+
+    r = requests.get(url, stream=True, timeout=120)
+    r.raise_for_status()
+
+    with open(path, "wb") as f:
+        for chunk in r.iter_content(1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+    size = os.path.getsize(path)
+
+    if size < 50_000_000:
+        raise Exception("Checkpoint download seems corrupted")
+
+    print("✅ Checkpoint ready:", size)
+
 # ==============================
 # HANDLER
 # ==============================
@@ -153,6 +183,7 @@ def handler(event):
         # 1. Base video
         # =========================
         base_video = get_base_video()
+        ensure_checkpoint()
 
         # =========================
         # 2. Generate audio
@@ -164,7 +195,7 @@ def handler(event):
             voice,
             audio_path
         ], timeout=300)
-
+        print("✅ Audio generated:", audio_path)
         # =========================
         # 3. Wav2Lip inference
         # =========================
@@ -178,7 +209,7 @@ def handler(event):
             "--resize_factor", "2",
             "--nosmooth"
         ], cwd=WAV2LIP_DIR, timeout=600)
-
+        print("✅ Wav2Lip inference completed:", output_path)
         # =========================
         # 4. Upload to Cloudinary
         # =========================
