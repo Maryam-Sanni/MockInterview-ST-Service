@@ -1,7 +1,18 @@
-venv
-__pycache__
+venv/
+.git/
+__pycache__/
 *.pyc
-results
-inputs
-temp
-.git
+*.pyo
+*.pyd
+
+# video/model files
+*.mp4
+*.avi
+*.mov
+*.pth
+checkpoints/
+inputs/
+results/
+
+# macOS
+.DS_Store

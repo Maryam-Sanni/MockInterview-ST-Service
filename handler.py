@@ -1,12 +1,9 @@
-from numpy.ma import size
-
 import runpod
 import subprocess
 import uuid
 import os
 import sys
 import requests
-
 import cloudinary
 import cloudinary.uploader
 
@@ -14,28 +11,23 @@ import cloudinary.uploader
 # CONFIG
 # ==============================
 
-INPUT_DIR = "inputs"
 OUTPUT_DIR = "/tmp"
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-WAV2LIP_DIR = os.path.join(APP_DIR, "Wav2Lip")
-GENERATE_AUDIO_SCRIPT = os.path.join(WAV2LIP_DIR, "generate_audio.py")
-INFERENCE_SCRIPT = os.path.join(WAV2LIP_DIR, "inference.py")
-WAV2LIP_CHECKPOINT = "/app/Wav2Lip/checkpoints/wav2lip_gan.pth"
+WAV2LIP_DIR = "/app/Wav2Lip"
 
-os.makedirs(INPUT_DIR, exist_ok=True)
+CHECKPOINT = "/app/Wav2Lip/checkpoints/wav2lip_gan.pth"
+S3FD = "/app/Wav2Lip/face_detection/detection/sfd/s3fd.pth"
+
+INFERENCE_SCRIPT = os.path.join(WAV2LIP_DIR, "inference.py")
+GENERATE_AUDIO_SCRIPT = os.path.join(WAV2LIP_DIR, "generate_audio.py")
+
+BASE_VIDEO_CACHE = "/tmp/base.mp4"
+
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-print("===== NEW BUILD MAY19 =====")
-print("APP CONTENTS:", os.listdir("/app"))
-
-if os.path.exists("/app/Wav2Lip"):
-    print("WAV2LIP EXISTS")
-    print(os.listdir("/app/Wav2Lip"))
-else:
-    print("NO WAV2LIP DIRECTORY")
+print("🚀 RunPod Wav2Lip Serverless Ready")
 
 # ==============================
-# CLOUDINARY CONFIG
+# CLOUDINARY
 # ==============================
 
 cloudinary.config(
@@ -45,173 +37,139 @@ cloudinary.config(
     secure=True
 )
 
-def upload_to_cloudinary(file_path):
+def upload_to_cloudinary(path):
     result = cloudinary.uploader.upload_large(
-        file_path,
+        path,
         resource_type="video",
         folder="wav2lip"
     )
     return result["secure_url"]
 
-def run_checked(command, *, cwd=None, timeout=None):
+# ==============================
+# HELPERS
+# ==============================
+
+def run_cmd(cmd, cwd=None, timeout=600):
+    print("▶", " ".join(cmd))
     result = subprocess.run(
-        command,
+        cmd,
         cwd=cwd,
-        check=False,
-        timeout=timeout,
         capture_output=True,
         text=True,
+        timeout=timeout
     )
 
     if result.stdout:
         print(result.stdout)
     if result.stderr:
-        print(result.stderr, file=sys.stderr)
+        print(result.stderr)
 
     if result.returncode != 0:
-        command_text = " ".join(command)
-        stderr = result.stderr.strip()
-        detail = f"{command_text} failed with exit code {result.returncode}"
-        if stderr:
-            detail = f"{detail}: {stderr}"
-        raise RuntimeError(detail)
+        raise RuntimeError(result.stderr)
 
     return result
 
-# ==============================
-# VOICES
-# ==============================
 
-def get_voice(language: str) -> str:
-    voices = {
-        "en": "en-GB-LibbyNeural",
-        "nl": "nl-NL-ColetteNeural",
-    }
-    return voices.get(language, "en-GB-LibbyNeural")
+def validate(path):
+    if not os.path.exists(path):
+        raise Exception(f"Missing file: {path}")
+    if os.path.getsize(path) < 1000:
+        raise Exception(f"File too small: {path}")
 
 # ==============================
-# BASE VIDEO DOWNLOAD (ROBUST)
+# BASE VIDEO (CACHED ONLY ONCE PER CONTAINER)
 # ==============================
 
 def get_base_video():
+    if os.path.exists(BASE_VIDEO_CACHE):
+        return BASE_VIDEO_CACHE
+
     url = os.environ.get("BASE_VIDEO_URL")
     if not url:
-        raise Exception("BASE_VIDEO_URL is not set")
+        raise Exception("BASE_VIDEO_URL missing")
 
-    path = "/tmp/base.mp4"
+    print("Downloading base video once...")
 
-    print("Downloading base video:", url)
-
-    r = requests.get(url, timeout=60, stream=True, allow_redirects=True)
+    r = requests.get(url, stream=True)
     r.raise_for_status()
 
-    with open(path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=1024 * 1024):
-            if chunk:
-                f.write(chunk)
-
-    size = os.path.getsize(path)
-    print("Base video size:", size)
-
-    if size < 1000:
-        raise Exception("Base video download failed (too small)")
-
-    # validate video integrity
-    ffprobe = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_format", "-show_streams", path],
-        capture_output=True,
-        text=True
-    )
-
-    if ffprobe.returncode != 0:
-        raise Exception("Invalid base video (ffprobe failed)")
-
-    return path
-
-def ensure_checkpoint():
-    path = "/app/Wav2Lip/checkpoints/wav2lip_gan.pth"
-
-    if os.path.exists(path) and os.path.getsize(path) > 50_000_000:
-        print("✅ Checkpoint OK:", path)
-        return
-
-    print("⚠️ Checkpoint missing — downloading...")
-
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    url = "https://huggingface.co/Nekochu/Wav2Lip/resolve/main/wav2lip_gan.pth"
-
-    r = requests.get(url, stream=True, timeout=120)
-    r.raise_for_status()
-
-    with open(path, "wb") as f:
+    with open(BASE_VIDEO_CACHE, "wb") as f:
         for chunk in r.iter_content(1024 * 1024):
-            if chunk:
-                f.write(chunk)
+            f.write(chunk)
 
-    size = os.path.getsize(path)
+    return BASE_VIDEO_CACHE
 
-    if size < 50_000_000:
-        raise Exception("Checkpoint download seems corrupted")
+# ==============================
+# VOICE MAP
+# ==============================
 
-    print("✅ Checkpoint ready:", size)
+def get_voice(lang):
+    return {
+        "en": "en-GB-LibbyNeural",
+        "nl": "nl-NL-ColetteNeural",
+    }.get(lang, "en-GB-LibbyNeural")
 
 # ==============================
 # HANDLER
 # ==============================
 
 def handler(event):
-    data = event["input"]
+    data = event.get("input", {})
 
     text = data["text"]
     language = data.get("language", "en")
 
     job_id = str(uuid.uuid4())
 
-    audio_path = os.path.join(OUTPUT_DIR, f"{job_id}.wav")
-    output_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
+    audio_path = f"/tmp/{job_id}.wav"
+    output_path = f"/tmp/{job_id}.mp4"
 
     voice = get_voice(language)
 
     try:
-        print("🚀 JOB START:", job_id)
-        print("HANDLER VERSION: wav2lip-absolute-subprocess-paths")
+        print("================================")
+        print("JOB:", job_id)
         print("TEXT:", text)
         print("VOICE:", voice)
 
         # =========================
-        # 1. Base video
+        # 1. BASE VIDEO (CACHED)
         # =========================
         base_video = get_base_video()
-        ensure_checkpoint()
 
         # =========================
-        # 2. Generate audio
+        # 2. AUDIO GENERATION
         # =========================
-        run_checked([
+        run_cmd([
             sys.executable,
             GENERATE_AUDIO_SCRIPT,
             text,
             voice,
             audio_path
         ], timeout=300)
-        print("✅ Audio generated:", audio_path)
+
+        validate(audio_path)
+
         # =========================
-        # 3. Wav2Lip inference
+        # 3. WAV2LIP INFERENCE
         # =========================
-        run_checked([
+        run_cmd([
             sys.executable,
             INFERENCE_SCRIPT,
-            "--checkpoint_path", WAV2LIP_CHECKPOINT,
+            "--checkpoint_path", CHECKPOINT,
             "--face", base_video,
             "--audio", audio_path,
             "--outfile", output_path,
             "--resize_factor", "2",
-            "--nosmooth"
+            "--nosmooth",
+            "--face_det_batch_size", "1",
+            "--wav2lip_batch_size", "16",
         ], cwd=WAV2LIP_DIR, timeout=600)
-        print("✅ Wav2Lip inference completed:", output_path)
+
+        validate(output_path)
+
         # =========================
-        # 4. Upload to Cloudinary
+        # 4. UPLOAD
         # =========================
         video_url = upload_to_cloudinary(output_path)
 
@@ -229,7 +187,10 @@ def handler(event):
         }
 
 # ==============================
-# RUNPOD START
+# RUNPOD ENTRY
 # ==============================
 
-runpod.serverless.start({"handler": handler})
+if __name__ == "__main__":
+    runpod.serverless.start({
+        "handler": handler
+    })
