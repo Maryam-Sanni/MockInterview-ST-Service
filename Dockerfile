@@ -1,10 +1,10 @@
 FROM runpod/pytorch:3.10-2.0.1-120-devel
 
-# ==============================
-# SYSTEM SETUP
-# ==============================
 WORKDIR /app
 
+# ==============================
+# SYSTEM DEPENDENCIES
+# ==============================
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     libgl1 \
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ==============================
-# PYTHON DEPENDENCIES (CACHE OPTIMIZED)
+# COPY REQUIREMENTS FIRST (CACHE OPTIMIZED)
 # ==============================
 COPY requirements.txt /app/
 
@@ -22,11 +22,18 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # ==============================
-# COPY PROJECT (LAST for caching)
+# COPY PROJECT (BEFORE MODEL DOWNLOAD)
 # ==============================
 COPY . /app
 
 # ==============================
-# RUN HANDLER
+# DOWNLOAD WAV2LIP CHECKPOINT (AFTER COPY)
+# ==============================
+RUN mkdir -p /app/Wav2Lip/checkpoints && \
+    wget -O /app/Wav2Lip/checkpoints/wav2lip_gan.pth \
+    https://github.com/Rudrabha/Wav2Lip/releases/download/v0.1/wav2lip_gan.pth
+
+# ==============================
+# START
 # ==============================
 CMD ["python", "-u", "handler.py"]
