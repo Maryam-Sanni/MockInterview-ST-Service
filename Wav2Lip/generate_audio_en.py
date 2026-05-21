@@ -2,7 +2,7 @@ import asyncio
 import edge_tts
 
 async def main():
-    text = "Good day and welcome to this interview session. I will be guiding you through a series of questions to assess your experience and suitability for the role. Let us begin."
+    text = "Okay, we’ll move forward to the next question."
 
     communicate = edge_tts.Communicate(
         text,

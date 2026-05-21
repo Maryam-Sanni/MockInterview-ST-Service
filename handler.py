@@ -11,6 +11,11 @@ import cloudinary.uploader
 # CONFIG
 # ==============================
 
+CACHE_DIR = "/cache"
+MODEL_DIR = os.path.join(CACHE_DIR, "models")
+
+os.makedirs(MODEL_DIR, exist_ok=True)
+
 OUTPUT_DIR = "/tmp"
 WAV2LIP_DIR = "/app/Wav2Lip"
 
@@ -116,7 +121,15 @@ def get_voice(lang):
 def handler(event):
     data = event.get("input", {})
 
-    text = data["text"]
+    text = data.get("prompt") or data.get("text")
+
+    if not text:
+        return {
+            "status": "error",
+            "message": "Missing 'prompt' or 'text' in input",
+            "received": event
+        }
+
     language = data.get("language", "en")
 
     job_id = str(uuid.uuid4())
@@ -132,14 +145,8 @@ def handler(event):
         print("TEXT:", text)
         print("VOICE:", voice)
 
-        # =========================
-        # 1. BASE VIDEO (CACHED)
-        # =========================
         base_video = get_base_video()
 
-        # =========================
-        # 2. AUDIO GENERATION
-        # =========================
         run_cmd([
             sys.executable,
             GENERATE_AUDIO_SCRIPT,
@@ -150,9 +157,6 @@ def handler(event):
 
         validate(audio_path)
 
-        # =========================
-        # 3. WAV2LIP INFERENCE
-        # =========================
         run_cmd([
             sys.executable,
             INFERENCE_SCRIPT,
@@ -168,9 +172,6 @@ def handler(event):
 
         validate(output_path)
 
-        # =========================
-        # 4. UPLOAD
-        # =========================
         video_url = upload_to_cloudinary(output_path)
 
         return {

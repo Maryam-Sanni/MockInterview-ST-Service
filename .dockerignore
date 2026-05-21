@@ -1,18 +1,44 @@
+# environments
 venv/
+.venv/
+env/
+
+# git
 .git/
+
+# python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# video/model files
+# macOS
+.DS_Store
+
+# videos/audio
 *.mp4
 *.avi
 *.mov
-*.pth
-checkpoints/
-inputs/
-results/
+*.wav
 
-# macOS
-.DS_Store
+# models (VERY IMPORTANT)
+*.pth
+*.pt
+checkpoints/
+models/
+model_cache/
+.cache/
+huggingface/
+
+# runtime folders
+inputs/
+outputs/
+results/
+tmp/
+data/
+
+# Wav2Lip (important if inside repo)
+Wav2Lip/
+
+# logs
+*.log
